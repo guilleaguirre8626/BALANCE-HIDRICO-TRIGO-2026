@@ -1,0 +1,1409 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Balance Hídrico — Puntos de Muestreo</title>
+<style>
+  :root {
+    --tierra: #4a3728;
+    --campo: #2d5a27;
+    --campo-claro: #3d7a35;
+    --agua: #1a6b8a;
+    --agua-claro: #2590b8;
+    --naranja: #d46b08;
+    --arena: #e8dcc8;
+    --arena-claro: #f5f0e8;
+    --blanco: #fafaf8;
+    --gris: #8a8a88;
+    --gris-claro: #d0cec8;
+    --ok: #27ae60;
+    --edit-color: #b35a00;
+    --shadow: 0 2px 12px rgba(74,55,40,0.12);
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--arena-claro); color: var(--tierra); min-height: 100vh; overflow-x: hidden; }
+
+  /* HEADER */
+  header { background: var(--tierra); color: var(--arena); padding: 14px 18px 10px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.25); }
+  header h1 { font-size: 15px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+  header p { font-size: 11px; opacity: 0.7; margin-top: 2px; }
+
+  /* TABS */
+  .tabs { display: flex; background: var(--campo); }
+  .tab-btn { flex: 1; padding: 10px 6px; background: none; border: none; color: rgba(255,255,255,0.65); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; cursor: pointer; transition: all 0.2s; border-bottom: 3px solid transparent; }
+  .tab-btn.active { color: #fff; border-bottom-color: #a8e063; }
+
+  /* PANELS */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ──── LISTA ──── */
+  .sector-list { padding: 12px; display: grid; gap: 10px; }
+  .sector-card { background: var(--blanco); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; border-left: 5px solid var(--campo); cursor: pointer; transition: transform 0.15s; }
+  .sector-card:active { transform: scale(0.98); }
+  .sector-card.done { border-left-color: var(--ok); }
+  .sector-card.done .card-header { background: #f0faf4; }
+  .sector-card.edited { border-left-color: var(--naranja); }
+  .card-header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #f8f6f2; }
+  .sector-badge { width: 36px; height: 36px; border-radius: 50%; background: var(--campo); color: #fff; font-size: 13px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .sector-card.done .sector-badge { background: var(--ok); }
+  .sector-card.edited .sector-badge { background: var(--naranja); }
+  .card-title { flex: 1; }
+  .card-title h3 { font-size: 14px; font-weight: 700; color: var(--tierra); }
+  .card-title p { font-size: 11px; color: var(--gris); margin-top: 1px; }
+  .status-icon { font-size: 20px; }
+  .card-coords { padding: 8px 14px; font-size: 11px; color: var(--gris); font-family: 'Courier New', monospace; border-top: 1px solid var(--arena); }
+  .card-actions { display: flex; border-top: 1px solid var(--arena); }
+  .btn-nav, .btn-check, .btn-edit-coord { flex: 1; padding: 10px; border: none; cursor: pointer; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; transition: background 0.15s; }
+  .btn-nav { background: var(--agua); color: #fff; }
+  .btn-nav:active { background: var(--agua-claro); }
+  .btn-edit-coord { background: var(--naranja); color: #fff; }
+  .btn-edit-coord:active { background: #e07a10; }
+  .btn-check { background: var(--campo); color: #fff; }
+  .btn-check.checked { background: var(--ok); }
+
+  /* ──── MAPA ──── */
+  #map-panel { padding: 0; }
+  #map { width: 100%; height: calc(100vh - 130px); }
+
+  /* Barra de edición sobre el mapa */
+  .edit-bar {
+    display: none;
+    position: absolute;
+    bottom: 20px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 999;
+    background: var(--edit-color);
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 24px;
+    font-size: 13px; font-weight: 700;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    display: none;
+    align-items: center; gap: 12px;
+    white-space: nowrap;
+    max-width: 90vw;
+  }
+  .edit-bar.active { display: flex; }
+  .edit-bar button { background: #fff; color: var(--edit-color); border: none; padding: 5px 12px; border-radius: 12px; font-size: 12px; font-weight: 800; cursor: pointer; }
+  .edit-bar button.cancel { background: rgba(255,255,255,0.25); color: #fff; }
+
+  /* Botón modo edición en mapa */
+  .map-edit-toggle {
+    position: absolute;
+    top: 10px; left: 10px;
+    z-index: 999;
+    background: var(--tierra);
+    color: var(--arena);
+    border: none;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 12px; font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    transition: background 0.15s;
+  }
+  .map-edit-toggle.editing { background: var(--edit-color); color: #fff; }
+
+  /* Botón GPS en mapa */
+  .map-gps-btn {
+    position: absolute;
+    top: 50px; left: 10px;
+    z-index: 999;
+    background: var(--agua);
+    color: #fff;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 12px; font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+
+  /* Botón NDVI en mapa */
+  .map-ndvi-btn {
+    position: absolute;
+    top: 90px; left: 10px;
+    z-index: 999;
+    background: var(--campo);
+    color: #fff;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 12px; font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  .map-ndvi-btn.on { background: #5a8f2a; }
+
+  /* Panel NDVI */
+  .ndvi-panel {
+    display: none;
+    position: absolute;
+    bottom: 14px; left: 10px; right: 10px;
+    max-width: 360px;
+    z-index: 1000;
+    background: rgba(255,255,255,0.97);
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+    padding: 12px 14px;
+    backdrop-filter: blur(4px);
+  }
+  .ndvi-panel.open { display: block; }
+  .ndvi-panel-head {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 13px; font-weight: 800; color: var(--tierra);
+    margin-bottom: 10px;
+  }
+  .ndvi-panel-head button {
+    background: none; border: none; font-size: 16px; cursor: pointer; color: var(--gris);
+  }
+  .ndvi-warn {
+    background: #fff4e0; color: #8a5a00;
+    font-size: 11px; padding: 7px 9px; border-radius: 7px;
+    margin-bottom: 10px; line-height: 1.4;
+    border: 1px solid #f0d9a8;
+  }
+  .ndvi-warn.hidden { display: none; }
+  .ndvi-row {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 9px;
+  }
+  .ndvi-row label {
+    font-size: 11px; font-weight: 700; color: var(--tierra);
+    width: 70px; flex-shrink: 0;
+  }
+  .ndvi-row input[type="text"] {
+    flex: 1; padding: 6px 9px; border: 1.5px solid var(--gris-claro);
+    border-radius: 6px; font-size: 12px; font-family: monospace;
+    outline: none; color: var(--tierra);
+  }
+  .ndvi-row input[type="text"]:focus { border-color: var(--campo); }
+  .ndvi-row input[type="range"] { flex: 1; accent-color: var(--campo); }
+  .ndvi-toggles {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 11px;
+  }
+  .ndvi-toggle {
+    padding: 9px 4px; border: 2px solid var(--arena); border-radius: 8px;
+    background: #fff; cursor: pointer; font-size: 12px; font-weight: 700;
+    color: var(--tierra); line-height: 1.3; transition: all 0.15s;
+  }
+  .ndvi-toggle small { font-weight: 500; font-size: 9px; color: var(--gris); }
+  .ndvi-toggle.active { border-color: var(--campo); background: #eef7e4; }
+  .ndvi-toggle.active small { color: var(--campo); }
+  .ndvi-info {
+    font-size: 10px; color: var(--gris); text-align: center;
+    margin-bottom: 8px; font-style: italic;
+  }
+  .ndvi-legend {
+    display: none;
+  }
+  .ndvi-legend.show { display: block; }
+  .legend-bar {
+    height: 14px; border-radius: 4px; margin-bottom: 4px;
+  }
+  .legend-labels {
+    display: flex; justify-content: space-between; font-size: 9px; color: var(--gris);
+  }
+
+  /* ──── MODAL EDICION ──── */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200; align-items: flex-end; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal-sheet { background: var(--blanco); width: 100%; max-width: 480px; border-radius: 18px 18px 0 0; padding: 20px; animation: slideUp 0.25s ease; }
+  @keyframes slideUp { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .modal-handle { width: 40px; height: 4px; background: var(--gris-claro); border-radius: 2px; margin: 0 auto 14px; }
+  .modal-title { font-size: 17px; font-weight: 800; margin-bottom: 4px; }
+  .modal-coords { font-size: 12px; color: var(--gris); font-family: monospace; margin-bottom: 16px; }
+  .nav-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .nav-option-btn { padding: 14px 10px; border: 2px solid var(--arena); border-radius: 10px; background: #fff; cursor: pointer; text-align: center; transition: all 0.15s; }
+  .nav-option-btn:active { border-color: var(--campo); background: #f0faf4; }
+  .nav-option-btn .icon { font-size: 26px; margin-bottom: 6px; }
+  .nav-option-btn .nav-label { font-size: 12px; font-weight: 700; color: var(--tierra); }
+  .nav-option-btn .nav-sub { font-size: 10px; color: var(--gris); margin-top: 2px; }
+  .btn-cerrar-modal { width: 100%; padding: 11px; background: var(--arena); border: none; border-radius: 8px; font-size: 13px; font-weight: 700; color: var(--tierra); cursor: pointer; }
+
+  /* Modal edición manual */
+  .edit-modal-body { padding: 4px 0 12px; }
+  .edit-field-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .edit-field-row label { font-size: 12px; font-weight: 700; width: 80px; flex-shrink: 0; color: var(--tierra); }
+  .edit-field-row input { flex: 1; padding: 9px 12px; border: 2px solid var(--gris-claro); border-radius: 8px; font-size: 14px; font-family: monospace; color: var(--tierra); background: var(--arena-claro); outline: none; }
+  .edit-field-row input:focus { border-color: var(--naranja); background: #fff; }
+  .edit-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
+  .btn-edit-save { padding: 12px; background: var(--edit-color); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .btn-edit-gps { padding: 12px; background: var(--agua); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .btn-edit-reset { padding: 10px; background: var(--arena); color: var(--tierra); border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; margin-top: 8px; width: 100%; }
+  .edit-hint { font-size: 11px; color: var(--gris); margin-bottom: 12px; line-height: 1.5; }
+  .edit-badge { display: inline-block; background: var(--naranja); color: #fff; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 10px; margin-left: 6px; vertical-align: middle; }
+
+  /* ──── REGISTRO ──── */
+  .registro-panel { padding: 12px; }
+  .reg-header { background: var(--campo); color: #fff; padding: 12px 14px; border-radius: var(--radius); margin-bottom: 12px; }
+  .reg-header h2 { font-size: 15px; font-weight: 700; }
+  .reg-header p { font-size: 11px; opacity: 0.8; margin-top: 3px; }
+  .form-card { background: var(--blanco); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px; margin-bottom: 10px; }
+  .form-card h4 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--campo); margin-bottom: 10px; padding-bottom: 6px; border-bottom: 2px solid var(--arena); }
+  .form-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .form-row label { font-size: 12px; color: var(--tierra); width: 120px; flex-shrink: 0; font-weight: 600; }
+  .form-row input, .form-row select { flex: 1; padding: 7px 10px; border: 1.5px solid var(--gris-claro); border-radius: 6px; font-size: 13px; background: var(--arena-claro); color: var(--tierra); outline: none; transition: border-color 0.15s; }
+  .form-row input:focus, .form-row select:focus { border-color: var(--campo); background: #fff; }
+  .btn-guardar { width: 100%; padding: 13px; background: var(--campo); color: #fff; border: none; border-radius: var(--radius); font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer; margin-top: 4px; }
+  .btn-exportar { width: 100%; padding: 11px; background: var(--agua); color: #fff; border: none; border-radius: var(--radius); font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer; margin-top: 8px; }
+  .sector-select-wrap select { width: 100%; padding: 9px 12px; border: 1.5px solid var(--gris-claro); border-radius: var(--radius); background: var(--blanco); font-size: 13px; font-weight: 600; color: var(--tierra); outline: none; }
+
+  /* ──── RESUMEN ──── */
+  .resumen-panel { padding: 12px; }
+  .progress-card { background: var(--blanco); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; margin-bottom: 10px; text-align: center; }
+  .progress-big { font-size: 36px; font-weight: 900; color: var(--campo); }
+  .progress-sub { font-size: 12px; color: var(--gris); }
+  .progress-bar-wrap { height: 10px; background: var(--arena); border-radius: 5px; overflow: hidden; margin: 10px 0 4px; }
+  .progress-bar { height: 100%; background: linear-gradient(90deg, var(--campo), #a8e063); border-radius: 5px; transition: width 0.4s ease; }
+  .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .summary-item { background: var(--blanco); border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px; text-align: center; }
+  .summary-item .val { font-size: 22px; font-weight: 900; color: var(--tierra); }
+  .summary-item .lbl { font-size: 10px; color: var(--gris); text-transform: uppercase; letter-spacing: 0.3px; margin-top: 2px; }
+  .summary-item.ok .val { color: var(--ok); }
+  .summary-item.pend .val { color: var(--agua); }
+
+  /* TOAST */
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(60px); background: var(--tierra); color: var(--arena); padding: 10px 20px; border-radius: 20px; font-size: 13px; font-weight: 600; z-index: 400; transition: transform 0.3s ease; white-space: nowrap; }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* Leaflet */
+  .leaflet-container { font-family: inherit; }
+  .leaflet-popup-content { font-size: 13px; }
+  #panel-mapa { position: relative; }
+
+  /* ──── NDVI TEMPORAL ──── */
+  .ndvit-panel { padding: 12px; }
+  .ndvit-status {
+    font-size: 12px; text-align: center; color: var(--gris);
+    padding: 8px; margin-bottom: 10px; min-height: 16px;
+  }
+  .ndvit-status.loading { color: #5a8f2a; font-weight: 600; }
+  .ndvit-status.error { color: #c0392b; font-weight: 600; }
+  .ndvit-diff-cards {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;
+  }
+  .ndvit-diff-cards:empty { display: none; }
+  .diff-card {
+    background: var(--blanco); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 12px; text-align: center;
+  }
+  .diff-card .diff-val { font-size: 22px; font-weight: 900; }
+  .diff-card .diff-lbl { font-size: 10px; color: var(--gris); text-transform: uppercase; letter-spacing: 0.3px; margin-top: 3px; }
+  .diff-card .diff-sub { font-size: 10px; color: var(--gris); margin-top: 2px; }
+  .diff-up   { color: #1a9850; }
+  .diff-down { color: #c0392b; }
+  .diff-flat { color: var(--gris); }
+  /* Tabla resumen multi-sector */
+  .ndvit-table { width: 100%; border-collapse: collapse; font-size: 12px; background: var(--blanco); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); margin-bottom: 10px; }
+  .ndvit-table th { background: #5a8f2a; color: #fff; padding: 8px 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .ndvit-table td { padding: 8px 6px; border-bottom: 1px solid var(--arena); text-align: center; }
+  .ndvit-table tr:last-child td { border-bottom: none; }
+</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+
+<header>
+  <h1>⚗️ Balance Hídrico — Muestreo 2 m</h1>
+  <p>Puntos de muestreo gravimétrico por sector de riego</p>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="showPanel('lista', this)">📋 Sectores</button>
+  <button class="tab-btn" onclick="showPanel('mapa', this)">🗺️ Mapa</button>
+  <button class="tab-btn" onclick="showPanel('ndvit', this)">📈 NDVI</button>
+  <button class="tab-btn" onclick="showPanel('registro', this)">✏️ Datos</button>
+  <button class="tab-btn" onclick="showPanel('resumen', this)">📊 Resumen</button>
+</div>
+
+<!-- PANEL LISTA -->
+<div id="panel-lista" class="panel active">
+  <div class="sector-list" id="sectorList"></div>
+</div>
+
+<!-- PANEL MAPA -->
+<div id="panel-mapa" class="panel">
+  <button class="map-edit-toggle" id="mapEditToggle" onclick="toggleMapEdit()">✏️ Editar puntos</button>
+  <button class="map-gps-btn" onclick="centrarGPS()">📍 Mi ubicación</button>
+  <button class="map-ndvi-btn" id="ndviBtn" onclick="toggleNdviPanel()">🛰️ NDVI</button>
+  <div id="map"></div>
+
+  <!-- Panel de control NDVI/NDWI -->
+  <div class="ndvi-panel" id="ndviPanel">
+    <div class="ndvi-panel-head">
+      <span>🛰️ Índices Sentinel-2</span>
+      <button onclick="toggleNdviPanel()">✖</button>
+    </div>
+    <div id="ndviConfigWarn" class="ndvi-warn">
+      ⚠️ Pegá tu <b>Instance ID</b> de Copernicus para activar las capas.
+    </div>
+    <div class="ndvi-row">
+      <label>Instance ID</label>
+      <input type="text" id="ndviInstanceId" placeholder="ej. a1b2c3d4-..." onchange="guardarInstanceId()">
+    </div>
+    <div class="ndvi-toggles">
+      <button class="ndvi-toggle" id="tgNdvi" onclick="setIndice('NDVI')">🌱 NDVI<br><small>Vegetación</small></button>
+      <button class="ndvi-toggle" id="tgNdwi" onclick="setIndice('NDWI')">💧 NDWI<br><small>Humedad/agua</small></button>
+      <button class="ndvi-toggle" id="tgOff" onclick="setIndice('OFF')">🚫 Apagar</button>
+    </div>
+    <div class="ndvi-row">
+      <label>Opacidad</label>
+      <input type="range" id="ndviOpacity" min="0" max="100" value="75" oninput="setOpacidad(this.value)">
+      <span id="ndviOpacityVal" style="font-size:11px;width:34px;text-align:right;">75%</span>
+    </div>
+    <div class="ndvi-row">
+      <label>Nubes máx</label>
+      <input type="range" id="ndviCloud" min="0" max="100" value="20" oninput="setNubes(this.value)">
+      <span id="ndviCloudVal" style="font-size:11px;width:34px;text-align:right;">20%</span>
+    </div>
+    <div class="ndvi-info" id="ndviInfo">Imagen más reciente · últimos 30 días</div>
+    <div class="ndvi-legend" id="ndviLegend"></div>
+  </div>
+
+  <div class="edit-bar" id="editBar">
+    <span id="editBarMsg">Arrastrá el marcador a la nueva posición</span>
+    <button onclick="confirmarEdicionMapa()">✔ Confirmar</button>
+    <button class="cancel" onclick="cancelarEdicionMapa()">✖ Cancelar</button>
+  </div>
+</div>
+
+<!-- PANEL NDVI TEMPORAL -->
+<div id="panel-ndvit" class="panel">
+  <div class="ndvit-panel">
+    <div class="reg-header" style="background:#5a8f2a;">
+      <h2>Diferencial de NDVI</h2>
+      <p>Serie temporal Sentinel-2 por sector — imagen actual vs. anteriores</p>
+    </div>
+
+    <!-- Configuración del Proxy -->
+    <div class="form-card" id="oauthCard">
+      <h4>🔗 Proxy de datos (Cloudflare)</h4>
+      <p style="font-size:11px;color:var(--gris);margin-bottom:10px;line-height:1.4;">
+        Pegá la URL de tu Worker de Cloudflare. Las credenciales de Copernicus quedan guardadas allá, no en este dispositivo.
+      </p>
+      <div class="form-row"><label>URL del Worker</label><input type="text" id="workerUrl" placeholder="https://...workers.dev" style="font-family:monospace;font-size:11px;"></div>
+      <button class="btn-exportar" onclick="guardarWorkerUrl()" style="background:#5a8f2a;margin-top:4px;">💾 Guardar URL</button>
+    </div>
+
+    <!-- Controles de consulta -->
+    <div class="form-card">
+      <h4>📊 Consulta</h4>
+      <div class="form-row">
+        <label>Sector</label>
+        <select id="ndvitSector" style="flex:1;padding:7px 10px;border:1.5px solid var(--gris-claro);border-radius:6px;font-size:13px;background:var(--arena-claro);">
+          <option value="ALL">— Todos los sectores —</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Período</label>
+        <select id="ndvitPeriodo" style="flex:1;padding:7px 10px;border:1.5px solid var(--gris-claro);border-radius:6px;font-size:13px;background:var(--arena-claro);">
+          <option value="90">Últimos 3 meses</option>
+          <option value="180" selected>Últimos 6 meses</option>
+          <option value="365">Último año</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Nubes máx</label>
+        <input type="range" id="ndvitCloud" min="0" max="100" value="30" oninput="document.getElementById('ndvitCloudVal').textContent=this.value+'%'" style="flex:1;accent-color:#5a8f2a;">
+        <span id="ndvitCloudVal" style="font-size:11px;width:34px;text-align:right;">30%</span>
+      </div>
+      <button class="btn-guardar" onclick="consultarNdviTemporal()" style="background:#5a8f2a;">📈 Generar gráfico</button>
+    </div>
+
+    <!-- Estado / resultado -->
+    <div id="ndvitStatus" class="ndvit-status"></div>
+
+    <!-- Tarjetas de diferencial -->
+    <div id="ndvitDiffCards" class="ndvit-diff-cards"></div>
+
+    <!-- Gráfico -->
+    <div class="form-card" id="ndvitChartCard" style="display:none;">
+      <h4 id="ndvitChartTitle">Evolución NDVI</h4>
+      <div style="position:relative;height:280px;"><canvas id="ndvitChart"></canvas></div>
+    </div>
+
+    <button class="btn-exportar" id="ndvitExportBtn" onclick="exportarNdviCSV()" style="display:none;">📤 Exportar serie a CSV</button>
+  </div>
+</div>
+
+<!-- PANEL REGISTRO -->
+<div id="panel-registro" class="panel">
+  <div class="registro-panel">
+    <div class="reg-header">
+      <h2>Carga de Muestras</h2>
+      <p>Peso húmedo y seco por horizonte — perfil 0–200 cm</p>
+    </div>
+    <div style="padding:0 0 10px 0">
+      <select id="regSectorSelect" style="width:100%;padding:9px 12px;border:1.5px solid var(--gris-claro);border-radius:var(--radius);background:var(--blanco);font-size:13px;font-weight:600;color:var(--tierra);outline:none;">
+        <option value="">— Seleccionar sector —</option>
+      </select>
+    </div>
+    <div class="form-card">
+      <h4>📅 Identificación</h4>
+      <div class="form-row"><label>Fecha</label><input type="date" id="regFecha"></div>
+      <div class="form-row"><label>Operador</label><input type="text" id="regOperador" placeholder="Nombre"></div>
+      <div class="form-row"><label>Observaciones</label><input type="text" id="regObs" placeholder="Opcional"></div>
+    </div>
+    <div class="form-card"><h4>🌱 Horizonte 0–20 cm</h4>
+      <div class="form-row"><label>Peso húmedo (g)</label><input type="number" step="0.1" id="ph_0" placeholder="0.0"></div>
+      <div class="form-row"><label>Peso seco (g)</label><input type="number" step="0.1" id="ps_0" placeholder="0.0"></div>
+    </div>
+    <div class="form-card"><h4>🌱 Horizonte 20–40 cm</h4>
+      <div class="form-row"><label>Peso húmedo (g)</label><input type="number" step="0.1" id="ph_1" placeholder="0.0"></div>
+      <div class="form-row"><label>Peso seco (g)</label><input type="number" step="0.1" id="ps_1" placeholder="0.0"></div>
+    </div>
+    <div class="form-card"><h4>🌱 Horizonte 40–60 cm</h4>
+      <div class="form-row"><label>Peso húmedo (g)</label><input type="number" step="0.1" id="ph_2" placeholder="0.0"></div>
+      <div class="form-row"><label>Peso seco (g)</label><input type="number" step="0.1" id="ps_2" placeholder="0.0"></div>
+    </div>
+    <div class="form-card"><h4>🌱 Horizonte 60–100 cm</h4>
+      <div class="form-row"><label>Peso húmedo (g)</label><input type="number" step="0.1" id="ph_3" placeholder="0.0"></div>
+      <div class="form-row"><label>Peso seco (g)</label><input type="number" step="0.1" id="ps_3" placeholder="0.0"></div>
+    </div>
+    <div class="form-card"><h4>🌱 Horizonte 100–150 cm</h4>
+      <div class="form-row"><label>Peso húmedo (g)</label><input type="number" step="0.1" id="ph_4" placeholder="0.0"></div>
+      <div class="form-row"><label>Peso seco (g)</label><input type="number" step="0.1" id="ps_4" placeholder="0.0"></div>
+    </div>
+    <div class="form-card"><h4>🌱 Horizonte 150–200 cm</h4>
+      <div class="form-row"><label>Peso húmedo (g)</label><input type="number" step="0.1" id="ph_5" placeholder="0.0"></div>
+      <div class="form-row"><label>Peso seco (g)</label><input type="number" step="0.1" id="ps_5" placeholder="0.0"></div>
+    </div>
+    <button class="btn-guardar" onclick="guardarMuestra()">💾 Guardar Muestra</button>
+    <button class="btn-exportar" onclick="exportarCSV()">📤 Exportar CSV</button>
+  </div>
+</div>
+
+<!-- PANEL RESUMEN -->
+<div id="panel-resumen" class="panel">
+  <div class="resumen-panel">
+    <div class="progress-card">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--gris);margin-bottom:6px;">Avance del muestreo</div>
+      <div class="progress-big" id="progPct">0%</div>
+      <div class="progress-sub" id="progSub">0 de 16 sectores completados</div>
+      <div class="progress-bar-wrap"><div class="progress-bar" id="progBar" style="width:0%"></div></div>
+    </div>
+    <div class="summary-grid">
+      <div class="summary-item ok"><div class="val" id="sumDone">0</div><div class="lbl">Muestreados</div></div>
+      <div class="summary-item pend"><div class="val" id="sumPend">16</div><div class="lbl">Pendientes</div></div>
+      <div class="summary-item"><div class="val" id="sumHoy">0</div><div class="lbl">Hoy</div></div>
+      <div class="summary-item"><div class="val" id="sumEditados">0</div><div class="lbl">Editados</div></div>
+    </div>
+    <div id="muestrasListResumen" style="margin-top:10px;"></div>
+    <button class="btn-exportar" onclick="exportarCSV()" style="margin-top:10px;">📤 Exportar CSV completo</button>
+    <button class="btn-exportar" onclick="exportarKML()" style="margin-top:8px;background:var(--campo);">🗺️ Exportar KML actualizado</button>
+  </div>
+</div>
+
+<!-- MODAL NAVEGACION -->
+<div class="modal-overlay" id="navModal" onclick="if(event.target===this)closeModal('navModal')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modalTitle">SECTOR 1</div>
+    <div class="modal-coords" id="modalCoords"></div>
+    <div class="nav-options">
+      <button class="nav-option-btn" onclick="openGoogleMaps()">
+        <div class="icon">🗺️</div><div class="nav-label">Google Maps</div><div class="nav-sub">Abrir navegación</div>
+      </button>
+      <button class="nav-option-btn" onclick="openWaze()">
+        <div class="icon">🚗</div><div class="nav-label">Waze</div><div class="nav-sub">Abrir en Waze</div>
+      </button>
+      <button class="nav-option-btn" onclick="copyCoords()">
+        <div class="icon">📋</div><div class="nav-label">Copiar coords</div><div class="nav-sub">Lat/Lon exactas</div>
+      </button>
+      <button class="nav-option-btn" onclick="irARegistro()">
+        <div class="icon">✏️</div><div class="nav-label">Cargar datos</div><div class="nav-sub">Registrar muestra</div>
+      </button>
+    </div>
+    <button class="btn-cerrar-modal" onclick="closeModal('navModal')">Cerrar</button>
+  </div>
+</div>
+
+<!-- MODAL EDICIÓN MANUAL -->
+<div class="modal-overlay" id="editModal" onclick="if(event.target===this)closeModal('editModal')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="editModalTitle">Editar Sector <span class="edit-badge">EDITAR</span></div>
+    <div class="edit-modal-body">
+      <p class="edit-hint">Ingresá las coordenadas manualmente, usá el GPS para tomar tu posición actual, o activá el modo arrastre en el mapa.</p>
+      <div class="edit-field-row">
+        <label>Latitud</label>
+        <input type="number" step="0.000001" id="editLat" placeholder="-31.650000">
+      </div>
+      <div class="edit-field-row">
+        <label>Longitud</label>
+        <input type="number" step="0.000001" id="editLon" placeholder="-63.730000">
+      </div>
+      <div class="edit-actions">
+        <button class="btn-edit-save" onclick="guardarEdicionManual()">✔ Guardar</button>
+        <button class="btn-edit-gps" onclick="usarGPSEnEdicion()">📍 Usar GPS</button>
+      </div>
+      <button class="btn-edit-reset" onclick="resetearPunto()">↩ Restaurar posición original</button>
+    </div>
+    <button class="btn-cerrar-modal" onclick="closeModal('editModal')">Cancelar</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ──── DATOS ORIGINALES (solo lectura, para reset) ──────────
+const SECTORES_ORIG = [
+  { id:1,  lat:-31.6560044, lon:-63.7331704 },
+  { id:2,  lat:-31.6555141, lon:-63.7297726 },
+  { id:3,  lat:-31.6504657, lon:-63.7343331 },
+  { id:4,  lat:-31.6509934, lon:-63.7307683 },
+  { id:5,  lat:-31.6520610, lon:-63.7369968 },
+  { id:6,  lat:-31.6528070, lon:-63.7395490 },
+  { id:7,  lat:-31.6529542, lon:-63.7420454 },
+  { id:8,  lat:-31.6575710, lon:-63.7363220 },
+  { id:9,  lat:-31.6582167, lon:-63.7392458 },
+  { id:10, lat:-31.6583486, lon:-63.7408729 },
+  { id:11, lat:-31.6584599, lon:-63.7424563 },
+  { id:12, lat:-31.6632466, lon:-63.7350323 },
+  { id:13, lat:-31.6633754, lon:-63.7367600 },
+  { id:14, lat:-31.6635360, lon:-63.7385176 },
+  { id:15, lat:-31.6636807, lon:-63.7402845 },
+  { id:16, lat:-31.6638492, lon:-63.7420637 },
+];
+
+// Coordenadas editables — se guardan en localStorage
+let coordsEditadas = JSON.parse(localStorage.getItem('coords_editadas_bh') || '{}');
+
+// Construir array activo fusionando orig + ediciones
+function getSectores() {
+  return SECTORES_ORIG.map(s => {
+    if (coordsEditadas[s.id]) return { ...s, lat: coordsEditadas[s.id].lat, lon: coordsEditadas[s.id].lon };
+    return { ...s };
+  });
+}
+
+const PROFUNDIDADES = ['0-20','20-40','40-60','60-100','100-150','150-200'];
+
+let muestras    = JSON.parse(localStorage.getItem('muestras_bh')    || '{}');
+let completados = JSON.parse(localStorage.getItem('completados_bh') || '[]');
+let currentSector = null;
+let map = null;
+let markers = {};
+let editModeActive = false;
+let editingSectorId = null;
+let tempLatLng = null; // posición temporal durante arrastre
+
+// ──── ESTADO NDVI/NDWI ─────────────────────────────────────
+let ndviLayer = null;            // capa WMS activa
+let ndviInstanceId = localStorage.getItem('ndvi_instance_id') || '';
+let ndviIndiceActivo = localStorage.getItem('ndvi_indice') || 'OFF';
+let ndviOpacidad = 0.75;
+let ndviNubes = 20;
+
+// ──── NAVEGACIÓN DE PANELES ────────────────────────────────
+function showPanel(name, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (name === 'mapa') { setTimeout(initMap, 50); }
+  if (name === 'resumen') updateResumen();
+}
+
+// ──── RENDERIZADO DE LISTA ─────────────────────────────────
+function renderLista() {
+  const SECTORES = getSectores();
+  const container = document.getElementById('sectorList');
+  container.innerHTML = '';
+  SECTORES.forEach(s => {
+    const done   = completados.includes(s.id);
+    const edited = !!coordsEditadas[s.id];
+    const card = document.createElement('div');
+    card.className = 'sector-card' + (done ? ' done' : '') + (edited && !done ? ' edited' : '');
+    card.innerHTML = `
+      <div class="card-header">
+        <div class="sector-badge">${s.id}</div>
+        <div class="card-title">
+          <h3>SECTOR ${s.id}${edited ? '<span class="edit-badge">MOD</span>' : ''}</h3>
+          <p>${done ? '✅ Muestra tomada' : edited ? '🟠 Coordenadas modificadas' : '⏳ Pendiente de muestreo'}</p>
+        </div>
+        <div class="status-icon">${done ? '✅' : edited ? '🟠' : '🔵'}</div>
+      </div>
+      <div class="card-coords">📍 ${s.lat.toFixed(6)}, ${s.lon.toFixed(6)}</div>
+      <div class="card-actions">
+        <button class="btn-nav" onclick="openNavModal(${s.id})">🧭 Navegar</button>
+        <button class="btn-edit-coord" onclick="abrirEditManual(${s.id}, event)">✏️ Editar</button>
+        <button class="btn-check ${done ? 'checked' : ''}" onclick="toggleDone(${s.id}, event)">${done ? '✅ Listo' : '☑ Marcar'}</button>
+      </div>`;
+    container.appendChild(card);
+  });
+}
+
+function toggleDone(id, e) {
+  e.stopPropagation();
+  const idx = completados.indexOf(id);
+  if (idx >= 0) completados.splice(idx, 1); else completados.push(id);
+  localStorage.setItem('completados_bh', JSON.stringify(completados));
+  renderLista(); updateMarkers();
+  showToast(completados.includes(id) ? `Sector ${id} marcado como listo` : `Sector ${id} desmarcado`);
+}
+
+// ──── MAPA ─────────────────────────────────────────────────
+function initMap() {
+  const SECTORES = getSectores();
+  if (map) { map.invalidateSize(); refreshAllMarkers(); return; }
+  const cLat = SECTORES.reduce((a,s) => a+s.lat, 0) / SECTORES.length;
+  const cLon = SECTORES.reduce((a,s) => a+s.lon, 0) / SECTORES.length;
+  map = L.map('map').setView([cLat, cLon], 14);
+
+  const esriSat    = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom:20, attribution:'© Esri, Maxar' });
+  const esriLabels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom:20 });
+  const googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', { maxZoom:20, subdomains:['mt0','mt1','mt2','mt3'], attribution:'© Google' });
+  const osm        = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap' });
+
+  esriSat.addTo(map); esriLabels.addTo(map);
+  L.control.layers({
+    '🛰️ Híbrido ESRI': L.layerGroup([esriSat, esriLabels]),
+    '🌍 Google Híbrido': googleHybrid,
+    '🗺️ OpenStreetMap': osm,
+  }, {}, { position:'topright', collapsed:true }).addTo(map);
+
+  SECTORES.forEach(s => crearMarcador(s));
+
+  // Restaurar estado NDVI guardado
+  ndviInitUI();
+  if (ndviInstanceId && ndviIndiceActivo !== 'OFF') aplicarCapaNdvi();
+}
+
+// ──── NDVI / NDWI (Sentinel-2 via Copernicus Data Space) ────
+// Rango de fechas dinámico: últimos 30 días → siempre la imagen más reciente
+function rangoFechasReciente() {
+  const hoy = new Date();
+  const desde = new Date(hoy); desde.setDate(hoy.getDate() - 30);
+  const fmt = d => d.toISOString().split('T')[0];
+  return `${fmt(desde)}/${fmt(hoy)}`;
+}
+
+function ndviInitUI() {
+  document.getElementById('ndviInstanceId').value = ndviInstanceId;
+  document.getElementById('ndviOpacity').value = Math.round(ndviOpacidad * 100);
+  document.getElementById('ndviOpacityVal').textContent = Math.round(ndviOpacidad * 100) + '%';
+  document.getElementById('ndviCloud').value = ndviNubes;
+  document.getElementById('ndviCloudVal').textContent = ndviNubes + '%';
+  document.getElementById('ndviConfigWarn').classList.toggle('hidden', !!ndviInstanceId);
+  marcarToggleActivo();
+}
+
+function toggleNdviPanel() {
+  const p = document.getElementById('ndviPanel');
+  const b = document.getElementById('ndviBtn');
+  p.classList.toggle('open');
+  b.classList.toggle('on', p.classList.contains('open'));
+}
+
+function guardarInstanceId() {
+  ndviInstanceId = document.getElementById('ndviInstanceId').value.trim();
+  localStorage.setItem('ndvi_instance_id', ndviInstanceId);
+  document.getElementById('ndviConfigWarn').classList.toggle('hidden', !!ndviInstanceId);
+  showToast(ndviInstanceId ? '✅ Instance ID guardado' : 'Instance ID vacío');
+  if (ndviInstanceId && ndviIndiceActivo !== 'OFF') aplicarCapaNdvi();
+}
+
+function setIndice(ind) {
+  if (ind !== 'OFF' && !ndviInstanceId) {
+    showToast('⚠️ Primero pegá tu Instance ID');
+    document.getElementById('ndviInstanceId').focus();
+    return;
+  }
+  ndviIndiceActivo = ind;
+  localStorage.setItem('ndvi_indice', ind);
+  marcarToggleActivo();
+  aplicarCapaNdvi();
+}
+
+function marcarToggleActivo() {
+  document.getElementById('tgNdvi').classList.toggle('active', ndviIndiceActivo === 'NDVI');
+  document.getElementById('tgNdwi').classList.toggle('active', ndviIndiceActivo === 'NDWI');
+  document.getElementById('tgOff').classList.toggle('active', ndviIndiceActivo === 'OFF');
+}
+
+function aplicarCapaNdvi() {
+  if (!map) return;
+  // Quitar capa anterior
+  if (ndviLayer) { map.removeLayer(ndviLayer); ndviLayer = null; }
+  const legend = document.getElementById('ndviLegend');
+  const info   = document.getElementById('ndviInfo');
+
+  if (ndviIndiceActivo === 'OFF' || !ndviInstanceId) {
+    legend.classList.remove('show');
+    info.textContent = 'Capa apagada';
+    return;
+  }
+
+  const url = `https://sh.dataspace.copernicus.eu/ogc/wms/${ndviInstanceId}`;
+  ndviLayer = L.tileLayer.wms(url, {
+    layers: ndviIndiceActivo,          // nombre de la capa en tu configuración SH
+    format: 'image/png',
+    transparent: true,
+    maxcc: ndviNubes,                  // % máximo de nubes
+    time: rangoFechasReciente(),       // últimos 30 días → mosaico más reciente
+    opacity: ndviOpacidad,
+    attribution: '© Copernicus / Sentinel-2'
+  });
+  ndviLayer.addTo(map);
+  // Asegurar que los marcadores queden por encima
+  Object.values(markers).forEach(({ marker }) => marker.setZIndexOffset(1000));
+
+  dibujarLeyenda();
+  info.textContent = `${ndviIndiceActivo} · imagen más reciente (últimos 30 días, nubes ≤${ndviNubes}%)`;
+}
+
+function dibujarLeyenda() {
+  const legend = document.getElementById('ndviLegend');
+  if (ndviIndiceActivo === 'NDVI') {
+    legend.innerHTML = `
+      <div class="legend-bar" style="background:linear-gradient(90deg,#a50026,#d73027,#fdae61,#fee08b,#d9ef8b,#a6d96a,#66bd63,#1a9850,#006837);"></div>
+      <div class="legend-labels"><span>Suelo desnudo</span><span>Vegetación vigorosa</span></div>`;
+    legend.classList.add('show');
+  } else if (ndviIndiceActivo === 'NDWI') {
+    legend.innerHTML = `
+      <div class="legend-bar" style="background:linear-gradient(90deg,#8c510a,#d8b365,#f6e8c3,#c7eae5,#5ab4ac,#01665e);"></div>
+      <div class="legend-labels"><span>Seco</span><span>Húmedo / agua</span></div>`;
+    legend.classList.add('show');
+  } else {
+    legend.classList.remove('show');
+  }
+}
+
+function setOpacidad(v) {
+  ndviOpacidad = v / 100;
+  document.getElementById('ndviOpacityVal').textContent = v + '%';
+  if (ndviLayer) ndviLayer.setOpacity(ndviOpacidad);
+}
+
+function setNubes(v) {
+  ndviNubes = parseInt(v);
+  document.getElementById('ndviCloudVal').textContent = v + '%';
+  if (ndviLayer && ndviIndiceActivo !== 'OFF') aplicarCapaNdvi();
+}
+
+function crearMarcador(s) {
+  const done   = completados.includes(s.id);
+  const edited = !!coordsEditadas[s.id];
+  const bg     = done ? '#27ae60' : edited ? '#d46b08' : '#2d5a27';
+  const icon = L.divIcon({
+    html: `<div style="background:${bg};color:#fff;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.45);cursor:pointer">${s.id}</div>`,
+    className:'', iconSize:[34,34], iconAnchor:[17,17]
+  });
+  const m = L.marker([s.lat, s.lon], { icon, draggable: false })
+    .addTo(map)
+    .bindPopup(buildPopupHTML(s));
+  m.on('dragend', e => {
+    const ll = e.target.getLatLng();
+    tempLatLng = ll;
+    document.getElementById('editBarMsg').textContent = `S${editingSectorId}: ${ll.lat.toFixed(6)}, ${ll.lng.toFixed(6)}`;
+  });
+  markers[s.id] = { marker: m, sector: s };
+}
+
+function buildPopupHTML(s) {
+  return `<b>SECTOR ${s.id}</b>${coordsEditadas[s.id] ? ' <span style="background:#d46b08;color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;">MOD</span>' : ''}<br>
+    <span style="font-family:monospace;font-size:11px;">${s.lat.toFixed(6)}, ${s.lon.toFixed(6)}</span><br><br>
+    <button onclick="openNavModal(${s.id})" style="background:#2d5a27;color:#fff;border:none;padding:5px 10px;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px;margin-right:4px">🧭 Ir</button>
+    <button onclick="abrirEditManualDesdePopup(${s.id})" style="background:#d46b08;color:#fff;border:none;padding:5px 10px;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px">✏️ Editar</button>`;
+}
+
+function refreshAllMarkers() {
+  const SECTORES = getSectores();
+  SECTORES.forEach(s => {
+    if (!markers[s.id]) { crearMarcador(s); return; }
+    const done   = completados.includes(s.id);
+    const edited = !!coordsEditadas[s.id];
+    const bg     = done ? '#27ae60' : edited ? '#d46b08' : '#2d5a27';
+    const icon = L.divIcon({
+      html: `<div style="background:${bg};color:#fff;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.45);cursor:pointer">${s.id}</div>`,
+      className:'', iconSize:[34,34], iconAnchor:[17,17]
+    });
+    markers[s.id].marker.setLatLng([s.lat, s.lon]);
+    markers[s.id].marker.setIcon(icon);
+    markers[s.id].marker.setPopupContent(buildPopupHTML(s));
+  });
+}
+
+function updateMarkers() { refreshAllMarkers(); }
+
+// ──── MODO EDICIÓN ARRASTRE ────────────────────────────────
+function toggleMapEdit() {
+  editModeActive = !editModeActive;
+  const btn  = document.getElementById('mapEditToggle');
+  const bar  = document.getElementById('editBar');
+  btn.textContent = editModeActive ? '🔒 Salir de edición' : '✏️ Editar puntos';
+  btn.classList.toggle('editing', editModeActive);
+
+  if (editModeActive) {
+    bar.classList.add('active');
+    bar.querySelector('#editBarMsg').textContent = 'Tocá un marcador para seleccionar, luego arrastrá';
+    // Hacer todos los marcadores draggables
+    Object.values(markers).forEach(({ marker, sector }) => {
+      marker.dragging.enable();
+      marker.on('click', () => {
+        editingSectorId = sector.id;
+        tempLatLng = marker.getLatLng();
+        document.getElementById('editBarMsg').textContent = `S${sector.id} seleccionado — arrastrá para mover`;
+        showToast(`Sector ${sector.id} seleccionado`);
+      });
+    });
+  } else {
+    bar.classList.remove('active');
+    editingSectorId = null; tempLatLng = null;
+    Object.values(markers).forEach(({ marker }) => {
+      marker.dragging.disable();
+      marker.off('click');
+      // Reattach popup on click
+    });
+    refreshAllMarkers();
+  }
+}
+
+function confirmarEdicionMapa() {
+  if (!editingSectorId || !tempLatLng) { showToast('⚠️ Seleccioná y mové un marcador primero'); return; }
+  guardarCoordenada(editingSectorId, tempLatLng.lat, tempLatLng.lng);
+  editingSectorId = null; tempLatLng = null;
+  document.getElementById('editBarMsg').textContent = 'Guardado ✔ — seleccioná otro marcador o salí';
+}
+
+function cancelarEdicionMapa() {
+  if (editingSectorId) {
+    // Revert marker to stored position
+    const s = getSectores().find(x => x.id === editingSectorId);
+    markers[editingSectorId].marker.setLatLng([s.lat, s.lon]);
+  }
+  editingSectorId = null; tempLatLng = null;
+  toggleMapEdit(); // salir del modo
+}
+
+// ──── MODAL EDICIÓN MANUAL ─────────────────────────────────
+function abrirEditManual(id, e) {
+  if (e) e.stopPropagation();
+  const s = getSectores().find(x => x.id === id);
+  currentSector = s;
+  editingSectorId = id;
+  document.getElementById('editModalTitle').innerHTML = `Editar SECTOR ${id} <span class="edit-badge">EDITAR</span>`;
+  document.getElementById('editLat').value = s.lat.toFixed(7);
+  document.getElementById('editLon').value = s.lon.toFixed(7);
+  document.getElementById('editModal').classList.add('open');
+}
+
+function abrirEditManualDesdePopup(id) {
+  map.closePopup();
+  setTimeout(() => abrirEditManual(id, null), 150);
+}
+
+function guardarEdicionManual() {
+  const lat = parseFloat(document.getElementById('editLat').value);
+  const lon = parseFloat(document.getElementById('editLon').value);
+  if (isNaN(lat) || isNaN(lon)) { showToast('⚠️ Coordenadas inválidas'); return; }
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) { showToast('⚠️ Coordenadas fuera de rango'); return; }
+  guardarCoordenada(editingSectorId, lat, lon);
+  closeModal('editModal');
+}
+
+function usarGPSEnEdicion() {
+  if (!navigator.geolocation) { showToast('GPS no disponible en este dispositivo'); return; }
+  showToast('📍 Obteniendo ubicación...');
+  navigator.geolocation.getCurrentPosition(pos => {
+    document.getElementById('editLat').value = pos.coords.latitude.toFixed(7);
+    document.getElementById('editLon').value = pos.coords.longitude.toFixed(7);
+    showToast(`📍 GPS: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`);
+  }, () => showToast('⚠️ No se pudo obtener el GPS'), { enableHighAccuracy: true, timeout: 8000 });
+}
+
+function resetearPunto() {
+  const orig = SECTORES_ORIG.find(x => x.id === editingSectorId);
+  document.getElementById('editLat').value = orig.lat.toFixed(7);
+  document.getElementById('editLon').value = orig.lon.toFixed(7);
+  delete coordsEditadas[editingSectorId];
+  localStorage.setItem('coords_editadas_bh', JSON.stringify(coordsEditadas));
+  closeModal('editModal');
+  renderLista(); refreshAllMarkers();
+  showToast(`Sector ${editingSectorId} restaurado al original`);
+}
+
+function guardarCoordenada(id, lat, lon) {
+  coordsEditadas[id] = { lat, lon };
+  localStorage.setItem('coords_editadas_bh', JSON.stringify(coordsEditadas));
+  renderLista(); refreshAllMarkers();
+  showToast(`✅ Sector ${id} → ${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+}
+
+// ──── GPS CENTRAR MAPA ──────────────────────────────────────
+function centrarGPS() {
+  if (!navigator.geolocation) { showToast('GPS no disponible'); return; }
+  showToast('📍 Localizando...');
+  navigator.geolocation.getCurrentPosition(pos => {
+    if (!map) return;
+    const ll = [pos.coords.latitude, pos.coords.longitude];
+    map.setView(ll, 16);
+    L.circleMarker(ll, { radius:8, color:'#1a6b8a', fillColor:'#2590b8', fillOpacity:0.9, weight:2 })
+      .addTo(map).bindPopup('📍 Mi ubicación').openPopup();
+  }, () => showToast('⚠️ No se pudo obtener GPS'), { enableHighAccuracy: true });
+}
+
+// ──── MODAL NAVEGACION ─────────────────────────────────────
+function openNavModal(id) {
+  if (map) map.closePopup();
+  currentSector = getSectores().find(s => s.id === id);
+  editingSectorId = id;
+  document.getElementById('modalTitle').textContent = `SECTOR ${id}`;
+  document.getElementById('modalCoords').textContent = `${currentSector.lat.toFixed(6)}, ${currentSector.lon.toFixed(6)}`;
+  document.getElementById('navModal').classList.add('open');
+}
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function openGoogleMaps() {
+  const { lat, lon } = currentSector;
+  window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}&travelmode=driving`, '_blank');
+  closeModal('navModal');
+}
+function openWaze() {
+  const { lat, lon } = currentSector;
+  window.open(`https://waze.com/ul?ll=${lat},${lon}&navigate=yes`, '_blank');
+  closeModal('navModal');
+}
+function copyCoords() {
+  const { lat, lon, id } = currentSector;
+  navigator.clipboard.writeText(`SECTOR ${id}: ${lat.toFixed(6)}, ${lon.toFixed(6)}`).catch(() => {});
+  showToast('Coordenadas copiadas'); closeModal('navModal');
+}
+function irARegistro() {
+  closeModal('navModal');
+  document.querySelectorAll('.tab-btn')[2].click();
+  document.getElementById('regSectorSelect').value = currentSector.id;
+}
+
+// ──── REGISTRO ─────────────────────────────────────────────
+function populateRegSelect() {
+  const sel = document.getElementById('regSectorSelect');
+  SECTORES_ORIG.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id; opt.textContent = `SECTOR ${s.id}`;
+    sel.appendChild(opt);
+  });
+  document.getElementById('regFecha').value = new Date().toISOString().split('T')[0];
+}
+
+function guardarMuestra() {
+  const sectorId = parseInt(document.getElementById('regSectorSelect').value);
+  if (!sectorId) { showToast('⚠️ Seleccioná un sector'); return; }
+  const fecha    = document.getElementById('regFecha').value;
+  const operador = document.getElementById('regOperador').value;
+  const obs      = document.getElementById('regObs').value;
+  const horizontes = [];
+  let allFilled = true;
+  PROFUNDIDADES.forEach((prof, i) => {
+    const ph = parseFloat(document.getElementById(`ph_${i}`).value);
+    const ps = parseFloat(document.getElementById(`ps_${i}`).value);
+    if (isNaN(ph) || isNaN(ps)) { allFilled = false; return; }
+    horizontes.push({ profundidad: prof, ph, ps, hg: parseFloat(((ph - ps) / ps * 100).toFixed(2)) });
+  });
+  if (!allFilled || horizontes.length < 6) { showToast('⚠️ Completar todos los horizontes'); return; }
+  const sector = getSectores().find(s => s.id === sectorId);
+  const muestra = { sectorId, lat: sector.lat, lon: sector.lon, fecha, operador, obs, horizontes };
+  if (!muestras[sectorId]) muestras[sectorId] = [];
+  muestras[sectorId].push(muestra);
+  localStorage.setItem('muestras_bh', JSON.stringify(muestras));
+  if (!completados.includes(sectorId)) { completados.push(sectorId); localStorage.setItem('completados_bh', JSON.stringify(completados)); }
+  renderLista(); updateMarkers();
+  showToast(`✅ Sector ${sectorId} guardado`);
+  PROFUNDIDADES.forEach((_, i) => { document.getElementById(`ph_${i}`).value = ''; document.getElementById(`ps_${i}`).value = ''; });
+  document.getElementById('regObs').value = '';
+}
+
+// ──── RESUMEN ──────────────────────────────────────────────
+function updateResumen() {
+  const done = completados.length, total = SECTORES_ORIG.length;
+  const pct  = Math.round(done / total * 100);
+  document.getElementById('progPct').textContent = pct + '%';
+  document.getElementById('progSub').textContent = `${done} de ${total} sectores completados`;
+  document.getElementById('progBar').style.width = pct + '%';
+  document.getElementById('sumDone').textContent = done;
+  document.getElementById('sumPend').textContent = total - done;
+  document.getElementById('sumEditados').textContent = Object.keys(coordsEditadas).length;
+  const hoy = new Date().toISOString().split('T')[0];
+  let hoyCount = 0;
+  Object.values(muestras).forEach(arr => arr.forEach(m => { if (m.fecha === hoy) hoyCount++; }));
+  document.getElementById('sumHoy').textContent = hoyCount;
+  const container = document.getElementById('muestrasListResumen');
+  container.innerHTML = '';
+  const keys = Object.keys(muestras);
+  if (!keys.length) { container.innerHTML = '<p style="color:var(--gris);font-size:13px;text-align:center;padding:16px;">Sin muestras registradas aún.</p>'; return; }
+  keys.sort((a,b) => a-b).forEach(sid => {
+    muestras[sid].forEach(m => {
+      const div = document.createElement('div');
+      div.style.cssText = 'background:#fff;border-radius:8px;padding:10px 12px;margin-bottom:8px;box-shadow:var(--shadow);font-size:12px;';
+      div.innerHTML = `<b>SECTOR ${sid}</b> · ${m.fecha} · ${m.operador || '—'}<br>${m.horizontes.map(h => `<span style="color:var(--campo);margin-right:8px;">${h.profundidad}cm: Hg=${h.hg}%</span>`).join('')}`;
+      container.appendChild(div);
+    });
+  });
+}
+
+// ──── CSV EXPORT ───────────────────────────────────────────
+function exportarCSV() {
+  const SECTORES = getSectores();
+  let rows = [['Sector','Lat','Lon','Lat_orig','Lon_orig','Editado','Fecha','Operador','Profundidad_cm','Peso_Humedo_g','Peso_Seco_g','Hg_%','Observaciones']];
+  SECTORES.forEach(s => {
+    if (!muestras[s.id]) return;
+    const orig = SECTORES_ORIG.find(x => x.id === s.id);
+    muestras[s.id].forEach(m => {
+      m.horizontes.forEach(h => {
+        rows.push([s.id, s.lat.toFixed(6), s.lon.toFixed(6), orig.lat.toFixed(6), orig.lon.toFixed(6), coordsEditadas[s.id] ? 'SI' : 'NO', m.fecha, m.operador||'', `"${h.profundidad}"`, h.ph, h.ps, h.hg, m.obs||'']);
+      });
+    });
+  });
+  if (rows.length === 1) { showToast('Sin datos para exportar'); return; }
+  const csv  = rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type:'text/csv;charset=utf-8;' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = `balance_hidrico_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click(); showToast('✅ CSV exportado');
+}
+
+// ──── KML EXPORT ───────────────────────────────────────────
+function exportarKML() {
+  const SECTORES = getSectores();
+  let placemarks = SECTORES.map(s => {
+    const edited = coordsEditadas[s.id];
+    const done   = completados.includes(s.id);
+    const desc   = done ? 'MUESTREADO' : edited ? 'COORDENADA MODIFICADA' : 'PENDIENTE';
+    return `  <Placemark>
+    <name>SECTOR ${s.id}</name>
+    <description>${desc}</description>
+    <Point><coordinates>${s.lon.toFixed(7)},${s.lat.toFixed(7)},0</coordinates></Point>
+  </Placemark>`;
+  }).join('\n');
+  const kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+  <name>Balance Hídrico — Puntos de Muestreo</name>
+  <description>Exportado el ${new Date().toLocaleDateString('es-AR')}</description>
+${placemarks}
+</Document>
+</kml>`;
+  const blob = new Blob([kml], { type:'application/vnd.google-earth.kml+xml' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = `puntos_muestreo_bh_${new Date().toISOString().split('T')[0]}.kml`;
+  a.click(); showToast('✅ KML exportado');
+}
+
+// ──── TOAST ────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+
+// ══════════════════════════════════════════════════════════
+//  MÓDULO: DIFERENCIAL DE NDVI (Statistical API Sentinel-2)
+// ══════════════════════════════════════════════════════════
+const SECTOR_POLY = {"1":[[-63.7347572,-31.6540069],[-63.7336599,-31.6593911],[-63.7307676,-31.6590544],[-63.7319102,-31.6535627],[-63.7347572,-31.6540069]],"2":[[-63.7291549,-31.6531179],[-63.7318987,-31.6535627],[-63.7307562,-31.6590545],[-63.7278982,-31.6587176],[-63.7291549,-31.6531179]],"3":[[-63.7358991,-31.6484663],[-63.7347684,-31.6539678],[-63.7319441,-31.6534942],[-63.7331548,-31.6479337],[-63.7358991,-31.6484663]],"4":[[-63.7291889,-31.6530592],[-63.7303878,-31.6474305],[-63.7331433,-31.6479241],[-63.7319326,-31.6534942],[-63.7291889,-31.6530592]],"5":[[-63.7381029,-31.6552099],[-63.7358663,-31.6551628],[-63.7358681,-31.648935],[-63.7359358,-31.6487785],[-63.7381051,-31.64907],[-63.7381029,-31.6552099]],"6":[[-63.740488,-31.6551878],[-63.7381142,-31.6551903],[-63.7381166,-31.6490699],[-63.7405384,-31.6493991],[-63.740488,-31.6551878]],"7":[[-63.7430454,-31.6552039],[-63.740511,-31.6551975],[-63.7405384,-31.6493991],[-63.7430867,-31.6497665],[-63.7430454,-31.6552039]],"8":[[-63.7382396,-31.6599246],[-63.7346012,-31.6595138],[-63.7345896,-31.6578642],[-63.7349335,-31.6562323],[-63.7358627,-31.6562763],[-63.7358796,-31.6554172],[-63.7382304,-31.6554149],[-63.7382396,-31.6599246]],"9":[[-63.7399268,-31.6601203],[-63.7382512,-31.6599441],[-63.738242,-31.6554344],[-63.7398821,-31.6554643],[-63.7399268,-31.6601203]],"10":[[-63.7415224,-31.6603366],[-63.7399383,-31.66013],[-63.7398821,-31.6554546],[-63.7414992,-31.6554852],[-63.7415224,-31.6603366]],"11":[[-63.7430947,-31.660495],[-63.7415224,-31.6603366],[-63.7415222,-31.6554851],[-63.7430474,-31.6554876],[-63.7430947,-31.660495]],"12":[[-63.734396,-31.6596408],[-63.7360514,-31.659812],[-63.7360514,-31.6686085],[-63.7342665,-31.6685308],[-63.734396,-31.6596408]],"13":[[-63.7360668,-31.6597988],[-63.7377996,-31.6599831],[-63.7377998,-31.6686875],[-63.7360669,-31.6686085],[-63.7360668,-31.6597988]],"14":[[-63.737815,-31.6599963],[-63.7395633,-31.6601806],[-63.7395792,-31.6687928],[-63.7378153,-31.6687139],[-63.737815,-31.6599963]],"15":[[-63.7395633,-31.6601806],[-63.7413425,-31.6604044],[-63.741374,-31.6688586],[-63.7395792,-31.6687796],[-63.7395633,-31.6601806]],"16":[[-63.7413425,-31.6604175],[-63.7431527,-31.6606281],[-63.743107,-31.6689375],[-63.741374,-31.6688454],[-63.7413425,-31.6604175]]};
+
+// Endpoint del proxy (Cloudflare Worker) — resuelve el CORS
+let workerUrl = localStorage.getItem('sh_worker_url') || '';
+let ndvitChartObj = null;
+let ultimaSerie = null; // para exportar
+
+// Evalscript: NDVI medio por sector, con dataMask
+const EVALSCRIPT_NDVI = `//VERSION=3
+function setup() {
+  return {
+    input: [{ bands: ["B04","B08","dataMask"] }],
+    output: [
+      { id: "ndvi", bands: 1, sampleType: "FLOAT32" },
+      { id: "dataMask", bands: 1 }
+    ]
+  };
+}
+function evaluatePixel(s) {
+  let ndvi = (s.B08 - s.B04) / (s.B08 + s.B04);
+  return { ndvi: [ndvi], dataMask: [s.dataMask] };
+}`;
+
+function ndvitInit() {
+  // poblar selector de sectores
+  const sel = document.getElementById('ndvitSector');
+  SECTORES_ORIG.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s.id; o.textContent = `SECTOR ${s.id}`;
+    sel.appendChild(o);
+  });
+  document.getElementById('workerUrl').value = workerUrl;
+  if (workerUrl) {
+    document.getElementById('oauthCard').style.display = 'none';
+  }
+}
+
+function guardarWorkerUrl() {
+  workerUrl = document.getElementById('workerUrl').value.trim().replace(/\/$/, '');
+  if (!workerUrl) { showToast('⚠️ Pegá la URL del Worker'); return; }
+  if (!/^https:\/\//.test(workerUrl)) { showToast('⚠️ La URL debe empezar con https://'); return; }
+  localStorage.setItem('sh_worker_url', workerUrl);
+  document.getElementById('oauthCard').style.display = 'none';
+  showToast('✅ URL del Worker guardada');
+}
+
+// Consulta vía proxy (Worker) para un sector → serie [{fecha, ndvi}]
+async function consultarSerieSector(sectorId, dias, nubes) {
+  const poly = SECTOR_POLY[sectorId];
+  if (!poly) throw new Error(`Sin polígono para sector ${sectorId}`);
+
+  // La Statistical API exige que (to - from) sea múltiplo exacto del intervalo.
+  // Usamos intervalo de 1 día y alineamos a medianoche UTC para evitar errores de fecha.
+  const hoy = new Date();
+  hoy.setUTCHours(0,0,0,0);
+  const desde = new Date(hoy);
+  desde.setUTCDate(hoy.getUTCDate() - dias);
+  // 'to' exclusivo: sumamos un día para incluir la fecha de hoy
+  const finExclusivo = new Date(hoy);
+  finExclusivo.setUTCDate(hoy.getUTCDate() + 1);
+  const iso = d => d.toISOString().split('T')[0] + 'T00:00:00Z';
+
+  const payload = {
+    input: {
+      bounds: {
+        geometry: { type: 'Polygon', coordinates: [poly] },
+        properties: { crs: 'http://www.opengis.net/def/crs/EPSG/0/4326' }
+      },
+      data: [{
+        type: 'sentinel-2-l2a',
+        dataFilter: { maxCloudCoverage: nubes }
+      }]
+    },
+    aggregation: {
+      timeRange: { from: iso(desde), to: iso(finExclusivo) },
+      aggregationInterval: { of: 'P1D' }, // 1 día; la API agrupa por adquisición real
+      evalscript: EVALSCRIPT_NDVI,
+      resx: 10, resy: 10
+    }
+  };
+
+  const r = await fetch(workerUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    let detalle = t.slice(0, 200);
+    try {
+      const ej = JSON.parse(t);
+      if (ej.error && ej.error.message) detalle = ej.error.message;
+    } catch(_) {}
+    throw new Error(`API ${r.status}: ${detalle}`);
+  }
+  const j = await r.json();
+  const serie = [];
+  (j.data || []).forEach(item => {
+    // Saltear intervalos sin datos (días sin paso del satélite)
+    const out = item.outputs && item.outputs.ndvi;
+    if (!out || !out.bands) return;
+    // El nombre de la banda puede variar (B0 o el primero disponible)
+    const bandKey = Object.keys(out.bands)[0];
+    const stats = out.bands[bandKey] && out.bands[bandKey].stats;
+    if (!stats) return;
+    // sampleCount > 0 y mean válido: hay píxeles reales
+    const tieneDatos = (stats.sampleCount == null || stats.sampleCount > 0);
+    if (stats.mean != null && !isNaN(stats.mean) && tieneDatos) {
+      const fecha = (item.interval && item.interval.from ? item.interval.from : '').split('T')[0];
+      if (fecha) serie.push({ fecha, ndvi: stats.mean });
+    }
+  });
+  serie.sort((a,b) => a.fecha.localeCompare(b.fecha));
+  return serie;
+}
+
+async function consultarNdviTemporal() {
+  if (!workerUrl) {
+    showToast('⚠️ Configurá la URL del Worker primero');
+    document.getElementById('oauthCard').style.display = 'block';
+    return;
+  }
+  const sectorVal = document.getElementById('ndvitSector').value;
+  const dias  = parseInt(document.getElementById('ndvitPeriodo').value);
+  const nubes = parseInt(document.getElementById('ndvitCloud').value);
+  const status = document.getElementById('ndvitStatus');
+  const diffCards = document.getElementById('ndvitDiffCards');
+  const chartCard = document.getElementById('ndvitChartCard');
+
+  diffCards.innerHTML = '';
+  status.className = 'ndvit-status loading';
+  status.textContent = '⏳ Consultando Sentinel-2... (puede tardar unos segundos)';
+
+  try {
+    if (sectorVal === 'ALL') {
+      await consultarTodos(dias, nubes);
+    } else {
+      await consultarUno(parseInt(sectorVal), dias, nubes);
+    }
+    status.className = 'ndvit-status';
+    status.textContent = '';
+  } catch (e) {
+    status.className = 'ndvit-status error';
+    status.textContent = '❌ ' + e.message;
+    chartCard.style.display = 'none';
+  }
+}
+
+// Un solo sector → gráfico de línea + diferencial
+async function consultarUno(sectorId, dias, nubes) {
+  const serie = await consultarSerieSector(sectorId, dias, nubes);
+  if (serie.length < 2) throw new Error('Datos insuficientes (menos de 2 fechas con imagen válida). Probá subir el % de nubes o ampliar el período.');
+
+  ultimaSerie = { tipo: 'uno', sectorId, serie };
+  const actual    = serie[serie.length - 1];
+  const anterior  = serie[serie.length - 2];
+  const promedio  = serie.reduce((a,x) => a + x.ndvi, 0) / serie.length;
+  const difAnt    = actual.ndvi - anterior.ndvi;
+  const difProm   = actual.ndvi - promedio;
+
+  renderDiffCards([
+    { val: actual.ndvi.toFixed(3), lbl: 'NDVI actual', sub: actual.fecha, cls: 'diff-flat' },
+    { val: (difAnt>=0?'+':'') + difAnt.toFixed(3), lbl: 'vs. imagen anterior', sub: anterior.fecha, cls: difClase(difAnt) },
+    { val: (difProm>=0?'+':'') + difProm.toFixed(3), lbl: 'vs. promedio período', sub: `media ${promedio.toFixed(3)}`, cls: difClase(difProm) },
+    { val: serie.length, lbl: 'imágenes válidas', sub: `nubes ≤${nubes}%`, cls: 'diff-flat' },
+  ]);
+
+  dibujarGraficoLinea(sectorId, serie, promedio);
+  document.getElementById('ndvitExportBtn').style.display = 'block';
+}
+
+// Todos los sectores → tabla comparativa de diferenciales + gráfico de barras
+async function consultarTodos(dias, nubes) {
+  const status = document.getElementById('ndvitStatus');
+  const resultados = [];
+  for (const s of SECTORES_ORIG) {
+    status.textContent = `⏳ Consultando sector ${s.id} de ${SECTORES_ORIG.length}...`;
+    try {
+      const serie = await consultarSerieSector(s.id, dias, nubes);
+      if (serie.length >= 2) {
+        const actual = serie[serie.length-1], anterior = serie[serie.length-2];
+        resultados.push({ id: s.id, actual: actual.ndvi, fecha: actual.fecha, dif: actual.ndvi - anterior.ndvi });
+      } else {
+        resultados.push({ id: s.id, actual: null, fecha: '—', dif: null });
+      }
+    } catch(e) {
+      resultados.push({ id: s.id, actual: null, fecha: 'error', dif: null });
+    }
+  }
+  ultimaSerie = { tipo: 'todos', resultados };
+  renderTablaTodos(resultados);
+  dibujarGraficoBarras(resultados);
+  document.getElementById('ndvitExportBtn').style.display = 'block';
+}
+
+function difClase(d) { return d > 0.01 ? 'diff-up' : d < -0.01 ? 'diff-down' : 'diff-flat'; }
+
+function renderDiffCards(cards) {
+  const c = document.getElementById('ndvitDiffCards');
+  c.innerHTML = cards.map(x => `
+    <div class="diff-card">
+      <div class="diff-val ${x.cls}">${x.val}</div>
+      <div class="diff-lbl">${x.lbl}</div>
+      <div class="diff-sub">${x.sub}</div>
+    </div>`).join('');
+}
+
+function renderTablaTodos(res) {
+  const c = document.getElementById('ndvitDiffCards');
+  c.style.gridTemplateColumns = '1fr';
+  let rows = res.map(r => {
+    const dv = r.dif==null ? '—' : (r.dif>=0?'+':'') + r.dif.toFixed(3);
+    const cls = r.dif==null ? 'diff-flat' : difClase(r.dif);
+    const arrow = r.dif==null ? '' : r.dif>0.01 ? '▲' : r.dif<-0.01 ? '▼' : '▬';
+    return `<tr><td><b>S${r.id}</b></td><td>${r.actual==null?'—':r.actual.toFixed(3)}</td>
+      <td class="${cls}">${arrow} ${dv}</td><td style="font-size:10px;color:var(--gris)">${r.fecha}</td></tr>`;
+  }).join('');
+  c.innerHTML = `<table class="ndvit-table">
+    <tr><th>Sector</th><th>NDVI actual</th><th>Δ vs. anterior</th><th>Fecha</th></tr>
+    ${rows}</table>`;
+}
+
+function dibujarGraficoLinea(sectorId, serie, promedio) {
+  const card = document.getElementById('ndvitChartCard');
+  card.style.display = 'block';
+  document.getElementById('ndvitChartTitle').textContent = `Evolución NDVI — Sector ${sectorId}`;
+  const ctx = document.getElementById('ndvitChart');
+  if (ndvitChartObj) ndvitChartObj.destroy();
+  ndvitChartObj = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: serie.map(p => p.fecha),
+      datasets: [
+        { label: 'NDVI medio', data: serie.map(p => p.ndvi),
+          borderColor: '#1a9850', backgroundColor: 'rgba(26,152,80,0.12)',
+          fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: '#1a9850' },
+        { label: 'Promedio período', data: serie.map(() => promedio),
+          borderColor: '#d46b08', borderDash: [6,4], pointRadius: 0, fill: false }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { y: { suggestedMin: 0, suggestedMax: 1, title: { display: true, text: 'NDVI' } } },
+      plugins: { legend: { labels: { font: { size: 11 } } } }
+    }
+  });
+}
+
+function dibujarGraficoBarras(res) {
+  const card = document.getElementById('ndvitChartCard');
+  card.style.display = 'block';
+  document.getElementById('ndvitChartTitle').textContent = 'Diferencial NDVI por sector (actual vs. anterior)';
+  const ctx = document.getElementById('ndvitChart');
+  if (ndvitChartObj) ndvitChartObj.destroy();
+  const valid = res.filter(r => r.dif != null);
+  ndvitChartObj = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: valid.map(r => 'S' + r.id),
+      datasets: [{
+        label: 'Δ NDVI',
+        data: valid.map(r => r.dif),
+        backgroundColor: valid.map(r => r.dif >= 0 ? 'rgba(26,152,80,0.8)' : 'rgba(192,57,43,0.8)')
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { y: { title: { display: true, text: 'Δ NDVI (actual − anterior)' } } },
+      plugins: { legend: { display: false } }
+    }
+  });
+}
+
+function exportarNdviCSV() {
+  if (!ultimaSerie) { showToast('Sin datos'); return; }
+  let rows;
+  if (ultimaSerie.tipo === 'uno') {
+    rows = [['Sector','Fecha','NDVI_medio']];
+    ultimaSerie.serie.forEach(p => rows.push([ultimaSerie.sectorId, p.fecha, p.ndvi.toFixed(4)]));
+  } else {
+    rows = [['Sector','NDVI_actual','Fecha','Diferencial_vs_anterior']];
+    ultimaSerie.resultados.forEach(r => rows.push([r.id, r.actual==null?'':r.actual.toFixed(4), r.fecha, r.dif==null?'':r.dif.toFixed(4)]));
+  }
+  const csv = rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `ndvi_diferencial_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click(); showToast('✅ CSV exportado');
+}
+
+// ──── INIT ─────────────────────────────────────────────────
+renderLista();
+populateRegSelect();
+ndvitInit();
+</script>
+</body>
+</html>
